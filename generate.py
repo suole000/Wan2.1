@@ -19,6 +19,22 @@ from wan.configs import MAX_AREA_CONFIGS, SIZE_CONFIGS, SUPPORTED_SIZES, WAN_CON
 from wan.utils.prompt_extend import DashScopePromptExpander, QwenPromptExpander
 from wan.utils.utils import cache_image, cache_video, str2bool
 
+import time
+RECORD_TIME = 1
+
+def time_record_start():
+    start = 0
+    if RECORD_TIME:
+        torch.cuda.synchronize()
+        start = time.time()
+    return start
+
+def time_record_end(start, string):
+    if RECORD_TIME:
+        torch.cuda.synchronize()
+        end = time.time()
+        print(string + f"耗时： {end - start:0.4f}秒")
+    return
 
 EXAMPLE_PROMPT = {
     "t2v-1.3B": {
@@ -357,6 +373,7 @@ def generate(args):
             logging.info(f"Extended prompt: {args.prompt}")
 
         logging.info("Creating WanT2V pipeline.")
+        start = time_record_start()
         wan_t2v = wan.WanT2V(
             config=cfg,
             checkpoint_dir=args.ckpt_dir,
@@ -367,9 +384,11 @@ def generate(args):
             use_usp=(args.ulysses_size > 1 or args.ring_size > 1),
             t5_cpu=args.t5_cpu,
         )
+        time_record_end(start, "init WanT2V")
 
         logging.info(
             f"Generating {'image' if 't2i' in args.task else 'video'} ...")
+        start = time_record_start()
         video = wan_t2v.generate(
             args.prompt,
             size=SIZE_CONFIGS[args.size],
@@ -380,6 +399,7 @@ def generate(args):
             guide_scale=args.sample_guide_scale,
             seed=args.base_seed,
             offload_model=args.offload_model)
+        time_record_end(start, "WanT2V generate")
 
     elif "i2v" in args.task:
         if args.prompt is None:
@@ -414,6 +434,7 @@ def generate(args):
             logging.info(f"Extended prompt: {args.prompt}")
 
         logging.info("Creating WanI2V pipeline.")
+        start = time_record_start()
         wan_i2v = wan.WanI2V(
             config=cfg,
             checkpoint_dir=args.ckpt_dir,
@@ -424,8 +445,10 @@ def generate(args):
             use_usp=(args.ulysses_size > 1 or args.ring_size > 1),
             t5_cpu=args.t5_cpu,
         )
+        time_record_end(start, "init WanI2V")
 
         logging.info("Generating video ...")
+        start = time_record_start()
         video = wan_i2v.generate(
             args.prompt,
             img,
@@ -437,6 +460,7 @@ def generate(args):
             guide_scale=args.sample_guide_scale,
             seed=args.base_seed,
             offload_model=args.offload_model)
+        time_record_end(start, "WanI2V generate")
     elif "flf2v" in args.task:
         if args.prompt is None:
             args.prompt = EXAMPLE_PROMPT[args.task]["prompt"]
@@ -472,6 +496,7 @@ def generate(args):
             logging.info(f"Extended prompt: {args.prompt}")
 
         logging.info("Creating WanFLF2V pipeline.")
+        start = time_record_start()
         wan_flf2v = wan.WanFLF2V(
             config=cfg,
             checkpoint_dir=args.ckpt_dir,
@@ -482,8 +507,10 @@ def generate(args):
             use_usp=(args.ulysses_size > 1 or args.ring_size > 1),
             t5_cpu=args.t5_cpu,
         )
+        time_record_end(start, "init WanFLF2V")
 
         logging.info("Generating video ...")
+        start = time_record_start()
         video = wan_flf2v.generate(
             args.prompt,
             first_frame,
@@ -496,6 +523,7 @@ def generate(args):
             guide_scale=args.sample_guide_scale,
             seed=args.base_seed,
             offload_model=args.offload_model)
+        time_record_end(start, "WanFLF2V generate")
     elif "vace" in args.task:
         if args.prompt is None:
             args.prompt = EXAMPLE_PROMPT[args.task]["prompt"]
@@ -520,6 +548,7 @@ def generate(args):
             logging.info(f"Extended prompt: {args.prompt}")
 
         logging.info("Creating VACE pipeline.")
+        start = time_record_start()
         wan_vace = wan.WanVace(
             config=cfg,
             checkpoint_dir=args.ckpt_dir,
@@ -530,6 +559,7 @@ def generate(args):
             use_usp=(args.ulysses_size > 1 or args.ring_size > 1),
             t5_cpu=args.t5_cpu,
         )
+        time_record_end(start, "init WanVace")
 
         src_video, src_mask, src_ref_images = wan_vace.prepare_source(
             [args.src_video], [args.src_mask], [
@@ -538,6 +568,7 @@ def generate(args):
             ], args.frame_num, SIZE_CONFIGS[args.size], device)
 
         logging.info(f"Generating video...")
+        start = time_record_start()
         video = wan_vace.generate(
             args.prompt,
             src_video,
@@ -551,6 +582,7 @@ def generate(args):
             guide_scale=args.sample_guide_scale,
             seed=args.base_seed,
             offload_model=args.offload_model)
+        time_record_end(start, "WanVace generate")
     else:
         raise ValueError(f"Unkown task type: {args.task}")
 
@@ -583,5 +615,7 @@ def generate(args):
 
 
 if __name__ == "__main__":
+    start = time_record_start()
     args = _parse_args()
     generate(args)
+    time_record_end(start, "main generate")
