@@ -13,6 +13,7 @@ import random
 import torch
 import torch.distributed as dist
 from PIL import Image
+from torch.profiler import profile, ProfilerActivity
 
 import wan
 from wan.configs import MAX_AREA_CONFIGS, SIZE_CONFIGS, SUPPORTED_SIZES, WAN_CONFIGS
@@ -389,16 +390,22 @@ def generate(args):
         logging.info(
             f"Generating {'image' if 't2i' in args.task else 'video'} ...")
         start = time_record_start()
-        video = wan_t2v.generate(
-            args.prompt,
-            size=SIZE_CONFIGS[args.size],
-            frame_num=args.frame_num,
-            shift=args.sample_shift,
-            sample_solver=args.sample_solver,
-            sampling_steps=args.sample_steps,
-            guide_scale=args.sample_guide_scale,
-            seed=args.base_seed,
-            offload_model=args.offload_model)
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],  # 监控 CPU/GPU
+            record_shapes=True,  # 记录输入形状
+        ) as prof:
+            video = wan_t2v.generate(
+                args.prompt,
+                size=SIZE_CONFIGS[args.size],
+                frame_num=args.frame_num,
+                shift=args.sample_shift,
+                sample_solver=args.sample_solver,
+                sampling_steps=args.sample_steps,
+                guide_scale=args.sample_guide_scale,
+                seed=args.base_seed,
+                offload_model=args.offload_model)
+        print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=10))
+
         time_record_end(start, "WanT2V generate")
 
     elif "i2v" in args.task:
